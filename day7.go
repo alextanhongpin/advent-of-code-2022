@@ -9,6 +9,12 @@ import (
 	"strings"
 )
 
+const (
+	maxDirSize     = 100_000
+	availableSpace = 70_000_000
+	requiredSpace  = 30_000_000
+)
+
 func main() {
 	fmt.Println(part1(input1))
 	fmt.Println(part1(input2))
@@ -16,138 +22,140 @@ func main() {
 	fmt.Println(part2(input2))
 }
 
+type FS struct {
+	files map[string]*FS
+	isDir bool
+	name  string
+	size  int
+}
+
+func NewFS(name string, size int, isDir bool) *FS {
+	return &FS{
+		name:  name,
+		size:  size,
+		isDir: isDir,
+		files: make(map[string]*FS),
+	}
+}
+
 func part1(input string) int {
 	root := parse(input)
 	updateSize(root)
-	return sizeOfDirectoryUnder100_000(root)
+	return sumSize(root)
 }
 
 func part2(input string) int {
 	root := parse(input)
 	updateSize(root)
-	diskAvailable := 70_000_000
-	unusedSpaceRequired := 30_000_000
-	currUnusedSpace := diskAvailable - root.size
 
-	minToDelete := math.MaxInt
-	var traverseDir func(root *dir)
-	traverseDir = func(root *dir) {
-		if root == nil {
+	remainingSpace := availableSpace - root.size
+	minSpaceToClear := math.MaxInt
+	var traverse func(fs *FS)
+	traverse = func(fs *FS) {
+		if fs == nil {
 			return
 		}
-
-		for _, file := range root.files {
+		for _, file := range fs.files {
 			if file.isDir {
-				// If we delete this file (adding back to unused space),
-				// will it be at least equal or greater to the unused space required?
-				if currUnusedSpace+file.size >= unusedSpaceRequired {
-					if file.size < minToDelete {
-						minToDelete = file.size
-					}
+				traverse(file)
+				if remainingSpace+file.size >= requiredSpace && file.size < minSpaceToClear {
+					minSpaceToClear = file.size
 				}
-				traverseDir(file)
 			}
 		}
 	}
-	traverseDir(root)
-	return minToDelete
+	traverse(root)
+	return minSpaceToClear
 }
 
-func sizeOfDirectoryUnder100_000(d *dir) int {
-	if d == nil {
+func sumSize(fs *FS) int {
+	if fs == nil {
 		return 0
 	}
 
 	var size int
-	for _, file := range d.files {
+	for _, file := range fs.files {
 		if file.isDir {
-			if file.size <= 100_000 {
+			if file.size <= maxDirSize {
 				size += file.size
 			}
-			size += sizeOfDirectoryUnder100_000(file)
+			size += sumSize(file)
 		}
 	}
+
 	return size
 }
 
-func updateSize(d *dir) {
-	if d == nil {
+func updateSize(fs *FS) {
+	if fs == nil {
 		return
 	}
 	var size int
-	for _, file := range d.files {
+	for _, file := range fs.files {
 		if file.isDir {
 			updateSize(file)
 		}
 		size += file.size
 	}
-	d.size = size
+	fs.size = size
 }
 
-type dir struct {
-	name  string
-	files map[string]*dir
-	size  int
-	isDir bool
-}
+func parse(input string) *FS {
+	lines := strings.Split(input, "\n")
 
-func newDir(name string, size int, isDir bool) *dir {
-	return &dir{
-		name:  name,
-		files: make(map[string]*dir),
-		size:  size,
-		isDir: isDir,
+	// Stack is used to keep track of existing directory traversed.
+	// `$ cd <dir>` is equivalent to appending to the stack,
+	// `% cd ..` is equivalent to popping the stack.
+	var stack []*FS
+
+	push := func(fs *FS) {
+		stack = append(stack, fs)
 	}
-}
+	pop := func() *FS {
+		head := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		return head
+	}
+	head := func() *FS {
+		return stack[len(stack)-1]
+	}
 
-func parse(input string) *dir {
-	root := newDir("/", -1, true)
-	curr := []*dir{root}
-	for _, row := range strings.Split(input, "\n") {
-		// Commands.
-		if strings.HasPrefix(row, "$") {
-			row = strings.TrimPrefix(row, "$ ")
-			switch {
-			case strings.HasPrefix(row, "cd"):
-				// $ cd e
-				parts := strings.Fields(row)
-				d := parts[1]
-				switch d {
+	for _, line := range lines {
+		parts := strings.Fields(line)
+		switch parts[0] {
+		case "$": // Commands
+			switch cmd := parts[1]; cmd {
+			case "ls":
+			case "cd":
+				dir := parts[2]
+				switch dir {
 				case "/":
-					curr = curr[:1]
+					push(NewFS("/", 0, true))
 				case "..":
-					curr = curr[:len(curr)-1]
+					_ = pop()
 				default:
-					c := curr[len(curr)-1]
-					if _, ok := c.files[d]; !ok {
-						c.files[d] = newDir(d, 0, true)
+					h := head()
+					if _, ok := h.files[dir]; !ok {
+						h.files[dir] = NewFS(dir, 0, true)
 					}
-					curr = append(curr, c.files[d])
+					push(h.files[dir])
 				}
-			case strings.HasPrefix(row, "ls"):
-			default:
-				panic("unsupported command: " + row)
-
 			}
-		} else {
-			last := curr[len(curr)-1]
-			// Outputs.
-			parts := strings.Fields(row)
-			if parts[0] == "dir" { // dir a
-				d := parts[1]
-				if _, ok := last.files[d]; !ok {
-					last.files[d] = newDir(d, 0, true)
-				}
-			} else { // 14848514 b.txt
-				size, file := toInt(parts[0]), parts[1]
-				if _, ok := curr[len(curr)-1].files[file]; ok {
-					continue
-				}
-				last.files[file] = newDir(file, size, false)
+		case "dir": // Directory
+			dir := parts[1]
+			h := head()
+			if _, ok := h.files[dir]; !ok {
+				h.files[dir] = NewFS(dir, 0, true)
+			}
+		default:
+			size, file := toInt(parts[0]), parts[1]
+			h := head()
+			if _, ok := h.files[file]; !ok {
+				h.files[file] = NewFS(file, size, false)
 			}
 		}
 	}
-	return root
+	return stack[0]
 }
 
 func toInt(s string) int {
