@@ -1,5 +1,3 @@
-// You can edit this code!
-// Click here and start typing.
 package main
 
 import "fmt"
@@ -20,10 +18,9 @@ func part2(s string) int {
 }
 
 func distinctAfter(s string, n int) int {
-	d := n - 1
-	for i := d; i < len(s); i++ {
-		if isUnique(s[i-d : i+1]) {
-			return i + 1
+	for i := n; i < len(s)+1; i++ {
+		if isUnique(s[i-n : i]) {
+			return i
 		}
 	}
 	return -1
