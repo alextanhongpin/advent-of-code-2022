@@ -4,12 +4,9 @@ package main
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 )
-
-var digitRe = regexp.MustCompile(`(\d+)`)
 
 func main() {
 	fmt.Println(part1(input1))
@@ -72,14 +69,15 @@ func parse(input string) ([][]string, []Instruction) {
 		}
 
 		if isIns {
-			matches := digitRe.FindAllString(row, -1)
-			if len(matches) == 0 {
-				continue
-			}
+			// Parse the instruction `move 1 from 2 to 1`
+			// 1. Split by whitespaces: [move, 1, from, 2, to, 1]
+			// 2. Take the values at odd number indices
+			// 3. Convert to int
+			matches := strings.Fields(row)
 			instructions = append(instructions, Instruction{
-				N:    toInt(matches[0]),
-				From: toInt(matches[1]) - 1,
-				To:   toInt(matches[2]) - 1,
+				N:    toInt(matches[1]),
+				From: toInt(matches[3]) - 1,
+				To:   toInt(matches[5]) - 1,
 			})
 		} else {
 			rawStacks = append(rawStacks, row)
