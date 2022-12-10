@@ -70,35 +70,32 @@ func part2(input string) int {
 
 	var x, cycle int
 	x = 1
+
+	refresh := func() {
+		// x is the midpoint of the 3px sprite.
+		// At every tick, as long as the pixel overlaps with the sprite position,
+		// the pixel is lit `#`.
+		if cycle%40 >= x-1 && cycle%40 <= x+1 {
+			grids[cycle/40][cycle%40] = '#'
+		}
+	}
+
 	for _, row := range rows {
+		refresh()
+
 		parts := strings.Fields(row)
 		switch parts[0] {
 		case "addx":
 			n := toInt(parts[1])
 
-			c := cycle % 40
-			if c >= x-1 && c <= x+1 {
-				grids[cycle/40][cycle%40] = '#'
-			}
-
 			cycle++
-			c = cycle % 40
-			if c >= x-1 && c <= x+1 {
-				grids[cycle/40][cycle%40] = '#'
-			}
+			refresh()
 
 			cycle++
 			x += n
 		case "noop":
-			c := cycle % 40
-			if c >= x-1 && c <= x+1 {
-				grids[cycle/40][cycle%40] = '#'
-			}
 			cycle++
-			c = cycle % 40
-			if c >= x-1 && c <= x+1 {
-				grids[cycle/40][cycle%40] = '#'
-			}
+			refresh()
 		default:
 			panic("invalid command")
 		}
