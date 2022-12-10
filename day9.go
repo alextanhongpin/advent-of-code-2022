@@ -19,24 +19,27 @@ type point struct {
 	x, y int
 }
 
-func (p point) isDisconnected(o point) bool {
-	return abs(p.x-o.x) == 2 || abs(p.y-o.y) == 2
+func (p point) isConnected(h point) bool {
+	return abs(p.x-h.x) < 2 && abs(p.y-h.y) < 2
 }
 
-func (p point) next(o point) point {
-	y := o.y - p.y
-	x := o.x - p.x
+// follow moves the tail in the direction of the head.
+// Tail always moves 1 square horizontally or vertically if it is 2 squares
+// away from the head.
+// Tail will move diagonally if both x and y of the tail is not the same as
+// the head.
+func (p point) follow(h point) point {
+	if p.isConnected(h) {
+		return p
+	}
+
+	x := h.x - p.x
+	y := h.y - p.y
+
 	return point{
-		x: int(math.Copysign(float64(min(abs(x), 1)), float64(x))),
-		y: int(math.Copysign(float64(min(abs(y), 1)), float64(y))),
+		x: p.x + int(math.Copysign(float64(min(abs(x), 1)), float64(x))),
+		y: p.y + int(math.Copysign(float64(min(abs(y), 1)), float64(y))),
 	}
-}
-
-func abs(n int) int {
-	if n < 0 {
-		return -n
-	}
-	return n
 }
 
 func part1(input string) int {
@@ -60,11 +63,7 @@ func part1(input string) int {
 			case "R":
 				head.x++
 			}
-			if tail.isDisconnected(head) {
-				p := tail.next(head)
-				tail.x += p.x
-				tail.y += p.y
-			}
+			tail = tail.follow(head)
 			cache[tail] = true
 		}
 	}
@@ -94,14 +93,8 @@ func part2(input string) int {
 			for r := 1; r < len(ropes); r++ {
 				head := ropes[r-1]
 				tail := ropes[r]
-				if tail.isDisconnected(head) {
-					p := tail.next(head)
-					tail.x += p.x
-					tail.y += p.y
-					ropes[r] = tail
-				} else {
-					break
-				}
+				tail = tail.follow(head)
+				ropes[r] = tail
 			}
 			//draw(ropes)
 			cache[ropes[len(ropes)-1]] = true
@@ -127,6 +120,13 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 func draw(points []point) {
