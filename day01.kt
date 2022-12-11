@@ -1,27 +1,30 @@
 fun main() {
    println(part1(input1))
-   println(part2(input1))
    println(part1(input2))
    println(part2(input2))
+   println(part2(input1))
 }
 
 fun part1(input: String): Int? {
-   val totalByGroup = input.split("\n\n").map{it -> 
-       it.split('\n')
-           .map{s -> s.toInt()}
-           .reduce{acc, n -> acc + n}
-   }
-   
-   return totalByGroup.max()
+	return input.split("\n\n")
+        .map{
+            it.split('\n')
+                .map(String::toInt)
+                .sum()
+        }
+        .max()
 }
 
 fun part2(input: String): Int? {
-   val totalByGroup = input.split("\n\n").map{it -> 
-       it.split('\n')
-           .map{s -> s.toInt()}
-           .reduce{acc, n -> acc + n}
-   }
-   return totalByGroup.sortedDescending().slice(0..2).sum()
+	return input.split("\n\n")
+        .map{
+            it.split('\n')
+                .map(String::toInt)
+                .sum()
+        }
+        .sortedDescending()
+        .slice(0..2)
+        .sum()
 }
 
 val input1 = """1000
