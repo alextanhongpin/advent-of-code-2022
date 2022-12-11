@@ -16,33 +16,15 @@ func main() {
 }
 
 func part1(input string) int {
-	monkeys := parse(input)
-	worryLevel := 3
-	rounds := 20
-
-	for r := 0; r < rounds; r++ {
-		for i, m := range monkeys {
-			for _, item := range m.items {
-				j, n := m.inspect(item, worryLevel)
-				monkeys[j].items = append(monkeys[j].items, n)
-			}
-			monkeys[i].inspected += len(m.items)
-			monkeys[i].items = []int{}
-		}
-	}
-
-	counts := make([]int, len(monkeys))
-	for i, m := range monkeys {
-		counts[i] = m.inspected
-	}
-	sort.Ints(counts)
-	return counts[len(counts)-1] * counts[len(counts)-2]
+	return exec(input, 20, 3)
 }
 
 func part2(input string) int {
+	return exec(input, 10_000, 1)
+}
+
+func exec(input string, rounds, worryLevel int) int {
 	monkeys := parse(input)
-	worryLevel := 1
-	rounds := 10_000
 
 	gcd := 1
 	for _, m := range monkeys {
