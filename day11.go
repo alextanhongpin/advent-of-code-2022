@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -71,47 +70,50 @@ func part2(input string) int {
 
 func parse(input string) []monkey {
 	var monkeys []monkey
-	var m monkey
-	rows := strings.Split(input, "\n")
 
-	for _, row := range rows {
-		row = strings.TrimSpace(row)
-		if row == "" {
-			monkeys = append(monkeys, m)
-			m = monkey{}
-			continue
-		}
-		if strings.HasPrefix(row, "Monkey") {
-			continue
-		} else if strings.HasPrefix(row, "Starting") {
-			row = strings.TrimPrefix(row, "Starting items: ")
-			items := strings.Split(row, ", ")
-			m.items = make([]int, len(items))
-			for i, item := range items {
-				m.items[i] = toInt(item)
+	rows := strings.Split(input, "\n")
+	for i := 0; i < len(rows); i += 7 {
+		var m monkey
+		// Parse items.
+		{
+			parts := strings.Split(rows[i+1], ": ")
+			itemStrs := strings.Split(parts[1], ", ")
+			m.items = make([]int, len(itemStrs))
+			for i, s := range itemStrs {
+				m.items[i] = toInt(s)
 			}
-		} else if strings.HasPrefix(row, "Operation:") {
-			parts := strings.Fields(row)
-			if opVal := parts[len(parts)-1]; opVal == "old" {
+		}
+
+		// Parse operations.
+		{
+			parts := strings.Fields(rows[i+2])
+			if last := parts[len(parts)-1]; last == "old" {
 				m.opOld = true
 			} else {
-				m.opVal = toInt(parts[len(parts)-1])
+				m.opVal = toInt(last)
 			}
 			m.op = parts[len(parts)-2]
-		} else if strings.HasPrefix(row, "Test:") {
-			parts := strings.Fields(row)
-			m.test = toInt(parts[len(parts)-1])
-		} else if strings.HasPrefix(row, "If true:") {
-			parts := strings.Fields(row)
-			m.yes = toInt(parts[len(parts)-1])
-		} else if strings.HasPrefix(row, "If false:") {
-			parts := strings.Fields(row)
-			m.no = toInt(parts[len(parts)-1])
-		} else {
-			log.Fatal("invalid command:", row)
 		}
+
+		// Parse test.
+		{
+			parts := strings.Fields(rows[i+3])
+			m.test = toInt(parts[len(parts)-1])
+		}
+
+		// Parse true.
+		{
+			parts := strings.Fields(rows[i+4])
+			m.yes = toInt(parts[len(parts)-1])
+		}
+
+		// Parse false.
+		{
+			parts := strings.Fields(rows[i+5])
+			m.no = toInt(parts[len(parts)-1])
+		}
+		monkeys = append(monkeys, m)
 	}
-	monkeys = append(monkeys, m)
 
 	return monkeys
 }
@@ -150,10 +152,12 @@ func (m monkey) inspect(item int, worryLevel int) (nextMonkey int, n int) {
 			n = item * m.opVal
 		}
 	}
+
 	n = n / worryLevel
 	if n%m.test == 0 {
 		return m.yes, n
 	}
+
 	return m.no, n
 }
 
