@@ -1,5 +1,3 @@
-// You can edit this code!
-// Click here and start typing.
 package main
 
 import (
@@ -16,270 +14,219 @@ func main() {
 	fmt.Println(part2(input2))
 }
 
-func draw(grid map[point]bool) {
-	minX, maxX, minY, maxY := getMinMax(grid)
-	board := make([][]rune, maxY-minY+1)
-	for i := range board {
-		board[i] = make([]rune, maxX-minX+1)
-		for j := range board[i] {
-			board[i][j] = '.'
-		}
-	}
-	for p, isWallOrSand := range grid {
-		x, y := p.x-minX, p.y-minY
-		if isWallOrSand {
-			board[y][x] = '#'
-		} else {
-			board[y][x] = 'o'
-		}
-	}
-	for _, row := range board {
-		fmt.Println(string(row))
-	}
-	fmt.Println()
-}
-
 func part1(input string) int {
 	grid := parse(input)
-	minX, _, _, maxY := getMinMax(grid)
-	origin := point{x: 500, y: 0}
-	for {
-		start := origin
-		for start.x >= minX && start.y <= maxY {
-			isWallOrBall, occupied := grid[start]
-			if !occupied {
-				next := start
-				next.y++
-				if isWallOrBall, ok := grid[next]; !ok {
-					start.y++
-					continue
-				} else {
-					if !isWallOrBall {
-						// Is ball, check diagonal left and see if it is occupied.
-						left := start
-						left.x--
-						left.y++
-						if _, ok := grid[left]; ok {
-							// Occupied, check diagonal right
-							right := start
-							right.x++
-							right.y++
-							if _, ok := grid[right]; ok {
-								// Occupied, stay at rest.
-								grid[start] = false
-								break
-							} else {
-								start = right
-							}
-						} else {
-							// Not occupied, place the start there.
-							start = left
-						}
-					}
-				}
-			}
-			if !isWallOrBall {
-				// Is ball, check diagonal left and see if it is occupied.
-				left := start
-				left.x--
-				left.y++
-				if _, ok := grid[left]; ok {
-					// Occupied, check diagonal right
-					right := start
-					right.x++
-					right.y++
-					if _, ok := grid[right]; ok {
-						// Occupied, stay at rest.
-						grid[start] = false
-						break
-					} else {
-						start = right
-					}
-				} else {
-					// Not occupied, place the start there.
-					start = left
-				}
-			}
-		}
-		valid := (start.x >= minX && start.y <= maxY)
-		if !valid {
-			break
+
+	maxY := imag(0i)
+	for p := range grid {
+		if imag(p) > maxY {
+			maxY = imag(p)
 		}
 	}
+
 	var count int
-	for _, isWallOrBall := range grid {
-		if !isWallOrBall {
-			count++
+iter:
+	for {
+		start := 500 + 0i
+		// Uncomment to see the change.
+		//draw(grid)
+	fall:
+		for {
+			if imag(start) > maxY {
+				break iter
+			}
+
+			next := grid[start+1i]
+			switch next {
+			case '#', 'o':
+				// Check left.
+				if _, ok := grid[start-1+1i]; !ok {
+					start += -1 + 1i
+					continue
+				}
+
+				// Check right.
+				if _, ok := grid[start+1+1i]; !ok {
+					start += 1 + 1i
+					continue
+				}
+
+				// Both left and right occupied.
+				grid[start] = 'o'
+				count++
+				break fall
+			default:
+				// Empty, move downwards.
+				start += 1i
+			}
 		}
 	}
+
 	return count
 }
 
 func part2(input string) int {
 	grid := parse(input)
-	minX, maxX, _, maxY := getMinMax(grid)
+
+	maxY := imag(0i)
+	minX, maxX := math.MaxInt, 0
+	for p := range grid {
+		if imag(p) > maxY {
+			maxY = imag(p)
+		}
+		if int(real(p)) > maxX {
+			maxX = int(real(p))
+		}
+		if int(real(p)) < minX {
+			minX = int(real(p))
+		}
+	}
+
+	// Draw the wall.
 	dx := maxX - minX
-
-	for x := minX - 3*dx; x < maxX+3*dx; x++ {
-		grid[point{x: x, y: maxY + 2}] = true
+	for i := minX - 3*dx; i < maxX+3*dx; i++ {
+		grid[complex(float64(i), maxY+2)] = '#'
 	}
 
-	// draw(grid)
-	origin := point{x: 500, y: 0}
-	for {
-		start := origin
-		for {
-			isWallOrBall, occupied := grid[start]
-			if !occupied {
-				next := start
-				next.y++
-				if isWallOrBall, ok := grid[next]; !ok {
-					start.y++
-					continue
-				} else {
-					if !isWallOrBall {
-						// Is ball, check diagonal left and see if it is occupied.
-						left := start
-						left.x--
-						left.y++
-						if _, ok := grid[left]; ok {
-							// Occupied, check diagonal right
-							right := start
-							right.x++
-							right.y++
-							if _, ok := grid[right]; ok {
-								// Occupied, stay at rest.
-								grid[start] = false
-								break
-							} else {
-								start = right
-							}
-						} else {
-							// Not occupied, place the start there.
-							start = left
-						}
-					}
-				}
-			}
-			if start == origin {
-				break
-			}
-			if !isWallOrBall {
-				// Is ball, check diagonal left and see if it is occupied.
-				left := start
-				left.x--
-				left.y++
-				if _, ok := grid[left]; ok {
-					// Occupied, check diagonal right
-					right := start
-					right.x++
-					right.y++
-					if _, ok := grid[right]; ok {
-						// Occupied, stay at rest.
-						grid[start] = false
-						break
-					} else {
-						start = right
-					}
-				} else {
-					// Not occupied, place the start there.
-					start = left
-				}
-			}
-		}
-		if start == origin {
-			break
-		}
-	}
 	var count int
-	for _, isWallOrBall := range grid {
-		if !isWallOrBall {
-			count++
+iter:
+	for {
+		start := 500 + 0i
+		// Uncomment to see the change.
+		//draw(grid)
+	fall:
+		for {
+			next := grid[start+1i]
+			switch next {
+			case '#', 'o':
+				// Check left.
+				if _, ok := grid[start-1+1i]; !ok {
+					start += -1 + 1i
+					continue
+				}
+
+				// Check right.
+				if _, ok := grid[start+1+1i]; !ok {
+					start += 1 + 1i
+					continue
+				}
+
+				// Both left and right occupied.
+				grid[start] = 'o'
+				count++
+				break fall
+			default:
+				// Empty, move downwards.
+				start += 1i
+			}
+			if _, ok := grid[500+0i]; ok {
+				break iter
+			}
+		}
+		if _, ok := grid[500+0i]; ok {
+			break iter
 		}
 	}
+
 	return count
 }
 
-func getMinMax(grid map[point]bool) (minX, maxX, minY, maxY int) {
-	minX, minY = math.MaxInt, math.MaxInt
+func draw(grid map[complex128]rune) {
+	minX, maxX := math.MaxInt, 0
+	minY, maxY := math.MaxInt, 0
 
 	for p := range grid {
-		if p.x < minX {
-			minX = p.x
+		x := int(real(p))
+		y := int(imag(p))
+		if x < minX {
+			minX = x
 		}
-		if p.x > maxX {
-			maxX = p.x
+		if x > maxX {
+			maxX = x
 		}
-		if p.y < minY {
-			minY = p.y
+		if y < minY {
+			minY = y
 		}
-		if p.y > maxY {
-			maxY = p.y
+		if y > maxY {
+			maxY = y
 		}
 	}
-	return
+
+	m := make([][]rune, maxY-minY+1)
+	for i := range m {
+		m[i] = make([]rune, maxX-minX+1)
+
+		for j := range m[i] {
+			m[i][j] = '.'
+		}
+	}
+
+	for p, r := range grid {
+		x := int(real(p)) - minX
+		y := int(imag(p)) - minY
+		m[y][x] = r
+	}
+
+	for i := range m {
+		fmt.Println(string(m[i]))
+	}
+	fmt.Println()
 }
 
-func parse(input string) map[point]bool {
-	res := make(map[point]bool)
-	rows := strings.Split(input, "\n")
-	for _, row := range rows {
+func parse(input string) map[complex128]rune {
+	res := make(map[complex128]rune)
+
+	for _, row := range strings.Split(input, "\n") {
 		coords := strings.Split(row, " -> ")
 		prev := coords[0]
-		for i := 0; i < len(coords[1:]); i++ {
-			next := coords[1:][i]
-			left, right := newPoint(prev), newPoint(next)
-
-			if left.x == right.x {
-				if left.y > right.y {
-					left, right = right, left
+		for _, next := range coords[1:] {
+			p, n := coord(prev), coord(next)
+			// Same x-axis.
+			if real(p) == real(n) {
+				t, b := imag(p), imag(n)
+				if t > b {
+					t, b = b, t
 				}
-				l := left
-				for y := left.y; y <= right.y; y++ {
-					res[l] = true
-					l.y++
-
+				// Move through y-axis.
+				for y := t; y <= b; y++ {
+					res[complex(real(p), y)] = '#'
 				}
 			}
-			if left.y == right.y {
-				if left.x > right.x {
-					left, right = right, left
+			// Same y-axis.
+			if imag(p) == imag(n) {
+				l, r := real(p), real(n)
+				if l > r {
+					l, r = r, l
 				}
-				l := left
-				for x := left.x; x <= right.x; x++ {
-					res[l] = true
-					l.x++
+				// Move through x-axis.
+				for x := l; x <= r; x++ {
+					res[complex(x, imag(p))] = '#'
 				}
 			}
 			prev = next
 		}
 	}
+
 	return res
 }
 
-type point struct {
-	x, y int
+func coord(s string) complex128 {
+	parts := strings.Split(s, ",")
+	r, i := parts[0], parts[1]
+	return complex(toFloat(r), toFloat(i))
 }
 
-func newPoint(in string) point {
-	parts := strings.Split(in, ",")
-	return point{
-		x: toInt(parts[0]),
-		y: toInt(parts[1]),
-	}
-}
-
-func toInt(s string) int {
-	n, err := strconv.Atoi(s)
+func toFloat(s string) float64 {
+	f, err := strconv.ParseFloat(s, 10)
 	if err != nil {
 		panic(err)
 	}
-	return n
+
+	return f
 }
 
 var input1 = `498,4 -> 498,6 -> 496,6
 503,4 -> 502,4 -> 502,9 -> 494,9`
-
 var input2 = `506,104 -> 511,104
 504,96 -> 509,96
 487,80 -> 487,75 -> 487,80 -> 489,80 -> 489,72 -> 489,80 -> 491,80 -> 491,76 -> 491,80 -> 493,80 -> 493,71 -> 493,80 -> 495,80 -> 495,76 -> 495,80 -> 497,80 -> 497,75 -> 497,80 -> 499,80 -> 499,70 -> 499,80 -> 501,80 -> 501,78 -> 501,80 -> 503,80 -> 503,70 -> 503,80
