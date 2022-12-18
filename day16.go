@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -11,7 +10,7 @@ func main() {
 	fmt.Println(part1(input1)) // 1651
 	fmt.Println(part1(input2)) // 1850
 	fmt.Println(part2(input1)) // 1707
-	// Doesn't work on this.
+	// This works now, but it is very slow.
 	fmt.Println(part2(input2)) // 2306
 }
 
@@ -84,16 +83,10 @@ func checkMove(h state, valves map[string]valve, timeTakenToVisitValveByOrigin m
 }
 
 func checkMove2(h state2, valves map[string]valve, timeTakenToVisitValveByOrigin map[string]map[string]int) int {
-	cache := make(map[string]int)
+	cache := make(map[int]int)
 
-	cacheKey := func(h state2) string {
-		valves := make([]string, 0, len(h.visited))
-		for v := range h.visited {
-			valves = append(valves, v)
-		}
-		sort.Strings(valves)
-
-		return fmt.Sprintf("%v:%v:%v", h.minutes, valves, h.valves)
+	cacheKey := func(h state2) int {
+		return len(h.visited)
 	}
 
 	visitable := func(h state2, at int) map[string]int {
@@ -118,9 +111,7 @@ func checkMove2(h state2, valves map[string]valve, timeTakenToVisitValveByOrigin
 	move = func(h state2) int {
 		var res int
 
-		if n, ok := cache[cacheKey(h)]; ok {
-			return max(h.rate(), n)
-		}
+		cache[cacheKey(h)] = max(cache[cacheKey(h)], h.rate())
 
 		visit0 := visitable(h, 0)
 		visit1 := visitable(h, 1)
@@ -149,6 +140,10 @@ func checkMove2(h state2, valves map[string]valve, timeTakenToVisitValveByOrigin
 						minutes: [2]int{mins0, mins1},
 						visited: visited1,
 					}
+					cache[cacheKey(next)] = max(cache[cacheKey(next)], next.rate())
+					if n, ok := cache[cacheKey(next)-1]; ok && next.rate() < n {
+						continue
+					}
 					res = max(res, move(next))
 				}
 			}
@@ -166,6 +161,10 @@ func checkMove2(h state2, valves map[string]valve, timeTakenToVisitValveByOrigin
 					minutes: [2]int{h.minutes[0], mins1},
 					visited: visited1,
 				}
+				cache[cacheKey(next)] = max(cache[cacheKey(next)], next.rate())
+				if n, ok := cache[cacheKey(next)-1]; ok && next.rate() < n {
+					continue
+				}
 				res = max(res, move(next))
 			}
 		} else if len(visit1) == 0 {
@@ -182,15 +181,19 @@ func checkMove2(h state2, valves map[string]valve, timeTakenToVisitValveByOrigin
 					minutes: [2]int{mins0, h.minutes[1]},
 					visited: visited0,
 				}
+				cache[cacheKey(next)] = max(cache[cacheKey(next)], next.rate())
+				if n, ok := cache[cacheKey(next)-1]; ok && next.rate() < n {
+					continue
+				}
 				res = max(res, move(next))
 			}
 		} else {
 			return h.rate()
 		}
 
-		cache[cacheKey(h)] = max(cache[cacheKey(h)], max(res, h.rate()))
+		cache[cacheKey(h)] = max(res, h.rate())
 
-		return cache[cacheKey(h)]
+		return max(res, h.rate())
 	}
 
 	return move(h)
