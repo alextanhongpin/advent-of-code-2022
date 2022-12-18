@@ -1,17 +1,17 @@
 package main
 
 import (
-	"container/heap"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 )
 
 func main() {
-	fmt.Println(part1(input1))
-	fmt.Println(part1(input2))
-	// Doesn't work
-	fmt.Println(part2(input1))
+	fmt.Println(part1(input1)) // 1651
+	fmt.Println(part1(input2)) // 1850
+	fmt.Println(part2(input1)) // 1707
+	// Doesn't work on this.
 	fmt.Println(part2(input2)) // 2306
 }
 
@@ -22,13 +22,25 @@ type state struct {
 	visited map[string]bool
 }
 
-func checkMove(h state, valves map[string]valve, timeTakenToVisitValveByOrigin map[string]map[string]int) []state {
-	var res []state
+type state2 struct {
+	valves  [2]string
+	minutes [2]int
+	rates   [2]int
+	visited map[string]bool
+}
+
+func (s state2) rate() int {
+	return s.rates[0] + s.rates[1]
+}
+
+func checkMove(h state, valves map[string]valve, timeTakenToVisitValveByOrigin map[string]map[string]int) int {
+	var res int
+
+	if h.minutes == 0 {
+		return h.rate
+	}
 
 	for v, t := range timeTakenToVisitValveByOrigin[h.valve] {
-		rate := valves[v].rate
-		// Uncomment to debug.
-		//fmt.Printf("left %d, visiting %v takes %d (%t), score=%d\n", h.minutes, v, t, h.visited[v], (h.minutes-(t+1))*rate)
 		// Don't revisit the same valve.
 		if h.visited[v] {
 			continue
@@ -36,201 +48,171 @@ func checkMove(h state, valves map[string]valve, timeTakenToVisitValveByOrigin m
 
 		// Not enough time to visit (1 minute) and open (another 1 minute)
 		if h.minutes-t < 1 {
+			res = max(res, h.rate)
 			continue
 		}
-		visited := make(map[string]bool)
-		for k, v := range h.visited {
-			visited[k] = v
-		}
+
+		visited := copyMap(h.visited)
 		visited[v] = true
 
-		// The t+1 refers to the additional time taken to open the valve after visiting.
-		res = append(res, state{
-			valve:   v,
+		rate := valves[v].rate
+		newRate := (h.minutes-(t+1))*rate + h.rate
+		next := checkMove(state{
+			valve: v,
+			// The t+1 refers to the additional time taken to open the valve after visiting.
 			rate:    (h.minutes-(t+1))*rate + h.rate,
 			minutes: h.minutes - (t + 1),
 			visited: visited,
-		})
+		}, valves, timeTakenToVisitValveByOrigin)
+
+		res = max(res, max(newRate, next))
 	}
 
 	return res
+}
+
+func checkMove2(h state2, valves map[string]valve, timeTakenToVisitValveByOrigin map[string]map[string]int) int {
+	cache := make(map[string]int)
+
+	cacheKey := func(h state2) string {
+		valves := make([]string, 0, len(h.visited))
+		for v := range h.visited {
+			valves = append(valves, v)
+		}
+		sort.Strings(valves)
+
+		return fmt.Sprintf("%v:%v:%v", valves, h.valves, h.minutes)
+	}
+
+	var move func(h state2) int
+	move = func(h state2) int {
+		var res int
+
+		if n, ok := cache[cacheKey(h)]; ok {
+			cache[cacheKey(h)] = max(n, h.rate())
+			return max(n, h.rate())
+		}
+
+		didMove := false
+		for v, t := range timeTakenToVisitValveByOrigin[h.valves[0]] {
+			// Don't revisit the same valve.
+			if h.visited[v] {
+				continue
+			}
+
+			// Not enough time to visit (1 minute) and open (another 1 minute)
+			if h.minutes[0]-t < 1 {
+				continue
+			}
+			didMove = true
+
+			visited := copyMap(h.visited)
+			visited[v] = true
+
+			fstRate := (h.minutes[0]-(t+1))*valves[v].rate + h.rates[0]
+
+			for vv, tt := range timeTakenToVisitValveByOrigin[h.valves[1]] {
+				if visited[vv] {
+					res = max(res, fstRate+h.rates[1])
+					continue
+				}
+				// Not enough time to visit (1 minute) and open (another 1 minute)
+				if h.minutes[1]-tt < 1 {
+					res = max(res, fstRate+h.rates[1])
+					continue
+				}
+
+				vvisited := copyMap(visited)
+				vvisited[vv] = true
+
+				sndRate := (h.minutes[1]-(tt+1))*valves[vv].rate + h.rates[1]
+				minutes := [2]int{
+					h.minutes[0] - (t + 1),
+					h.minutes[1] - (tt + 1),
+				}
+
+				next := state2{
+					valves: [2]string{v, vv},
+					// The t+1 refers to the additional time taken to open the valve after visiting.
+					rates:   [2]int{fstRate, sndRate},
+					minutes: minutes,
+					visited: vvisited,
+				}
+				if n, ok := cache[cacheKey(next)]; ok {
+					res = max(res, n)
+					continue
+				}
+				res = max(res, max(fstRate+sndRate, move(next)))
+				cache[cacheKey(next)] = res
+			}
+		}
+
+		if !didMove {
+			for vv, tt := range timeTakenToVisitValveByOrigin[h.valves[1]] {
+				if h.visited[vv] {
+					res = max(res, h.rate())
+					continue
+				}
+				// Not enough time to visit (1 minute) and open (another 1 minute)
+				if h.minutes[1]-tt < 1 {
+					res = max(res, h.rate())
+					continue
+				}
+
+				vvisited := copyMap(h.visited)
+				vvisited[vv] = true
+
+				sndRate := (h.minutes[1]-(tt+1))*valves[vv].rate + h.rates[1]
+				next := state2{
+					valves: [2]string{h.valves[0], vv},
+					// The t+1 refers to the additional time taken to open the valve after visiting.
+					rates:   [2]int{h.rates[0], sndRate},
+					minutes: [2]int{h.minutes[0], h.minutes[1] - (tt + 1)},
+					visited: vvisited,
+				}
+				if n, ok := cache[cacheKey(next)]; ok {
+					res = max(res, n)
+					continue
+				}
+				res = max(res, max(h.rates[0]+sndRate, move(next)))
+				cache[cacheKey(next)] = res
+			}
+		}
+
+		cache[cacheKey(h)] = max(h.rate(), res)
+
+		return cache[cacheKey(h)]
+	}
+
+	return move(h)
 }
 
 func part1(input string) int {
 	valves := parse(input)
 	timeTakenToVisitValveByOrigin := computeTimeTakenToVisitValveByOrigin(valves)
 
-	var valvesCount int
-	for _, d := range valves {
-		if d.rate > 0 {
-			valvesCount++
-		}
-	}
-
-	q := []state{state{
+	h := state{
 		valve:   "AA",
 		minutes: 30,
 		rate:    0,
 		visited: make(map[string]bool),
-	}}
-
-	var max int
-	for len(q) > 0 {
-		var h state
-		h, q = q[0], q[1:]
-		// Terminates after 30 minutes has elapsed, or when all the valves
-		// (non-zero flow rate) are opened.
-		if h.minutes == 0 || len(h.visited) == valvesCount {
-			if h.rate > max {
-				max = h.rate
-			}
-		}
-
-		moves := checkMove(h, valves, timeTakenToVisitValveByOrigin)
-		q = append(q, moves...)
 	}
 
-	return max
+	return checkMove(h, valves, timeTakenToVisitValveByOrigin)
 }
 
 func part2(input string) int {
 	valves := parse(input)
 	timeTakenToVisitValveByOrigin := computeTimeTakenToVisitValveByOrigin(valves)
 
-	var valvesCount int
-	for _, d := range valves {
-		if d.rate > 0 {
-			valvesCount++
-		}
+	h := state2{
+		valves:  [2]string{"AA", "AA"},
+		minutes: [2]int{26, 26},
+		rates:   [2]int{0, 0},
+		visited: make(map[string]bool),
 	}
 
-	pq := &PriorityQueue{&Item{
-		// y for yours, e for elephant.
-		yvalve:   "AA",
-		evalve:   "AA",
-		yminutes: 26,
-		eminutes: 26,
-		yrate:    0,
-		erate:    0,
-		visited:  make(map[string]bool),
-	}}
-
-	checkHasRemainingTime := func(h *Item) bool {
-		for v, t := range timeTakenToVisitValveByOrigin[h.yvalve] {
-			if h.visited[v] {
-				continue
-			}
-			if h.yminutes-t < 1 {
-				continue
-			}
-			return true
-		}
-
-		for vv, tt := range timeTakenToVisitValveByOrigin[h.evalve] {
-			if h.visited[vv] {
-				continue
-			}
-			if h.eminutes-tt < 1 {
-				continue
-			}
-			return true
-		}
-
-		return false
-	}
-
-	var counter int
-	var max int
-	for pq.Len() > 0 {
-		//for len(q) > 0 {
-		counter++
-		//if counter%10_000 == 0 {
-		//fmt.Println(len(q))
-		fmt.Println(pq.Len())
-		//}
-
-		h := heap.Pop(pq).(*Item)
-		//var h state
-		//h, q = q[0], q[1:]
-
-		if !checkHasRemainingTime(h) || h.yminutes == 0 || h.eminutes == 0 || len(h.visited) == valvesCount {
-			rate := h.yrate + h.erate
-			if rate > max {
-				max = rate
-			}
-			fmt.Println("max", max, pq.Len())
-			//return max
-			continue
-			//return max
-		}
-
-		ymoves := checkMove(state{
-			valve:   h.yvalve,
-			rate:    h.yrate,
-			minutes: h.yminutes,
-			visited: copyMap(h.visited),
-		}, valves, timeTakenToVisitValveByOrigin)
-
-		emoves := checkMove(state{
-			valve:   h.evalve,
-			rate:    h.erate,
-			minutes: h.eminutes,
-			visited: copyMap(h.visited),
-		}, valves, timeTakenToVisitValveByOrigin)
-
-		if len(ymoves) == 0 {
-			for _, emove := range emoves {
-				heap.Push(pq, &Item{
-					priority: emove.rate,
-					yvalve:   h.yvalve,
-					yrate:    h.yrate,
-					yminutes: h.yminutes,
-					evalve:   emove.valve,
-					erate:    emove.rate,
-					eminutes: emove.minutes,
-					visited:  copyMap(emove.visited),
-				})
-			}
-		} else {
-			for _, ymove := range ymoves {
-				if len(emoves) == 0 {
-					heap.Push(pq, &Item{
-						priority: ymove.rate,
-						yvalve:   ymove.valve,
-						yrate:    ymove.rate,
-						yminutes: ymove.minutes,
-						evalve:   h.evalve,
-						erate:    h.erate,
-						eminutes: h.eminutes,
-						visited:  copyMap(ymove.visited),
-					})
-				} else {
-					for _, emove := range emoves {
-						if emove.visited[ymove.valve] || ymove.visited[emove.valve] {
-							continue
-						}
-						visited := copyMap(ymove.visited)
-						for k, v := range emove.visited {
-							visited[k] = v
-						}
-
-						heap.Push(pq, &Item{
-							priority: ymove.rate + emove.rate,
-							yvalve:   ymove.valve,
-							yrate:    ymove.rate,
-							yminutes: ymove.minutes,
-							evalve:   emove.valve,
-							erate:    emove.rate,
-							eminutes: emove.minutes,
-							visited:  visited,
-						})
-					}
-				}
-			}
-		}
-	}
-
-	return max
+	return checkMove2(h, valves, timeTakenToVisitValveByOrigin)
 }
 
 func copyMap[K comparable, V any](m map[K]V) map[K]V {
@@ -314,6 +296,14 @@ func toInt(s string) int {
 		panic(err)
 	}
 	return n
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+
+	return b
 }
 
 // An Item is something we manage in a priority queue.
