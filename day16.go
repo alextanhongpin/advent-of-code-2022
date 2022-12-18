@@ -40,35 +40,47 @@ func checkMove(h state, valves map[string]valve, timeTakenToVisitValveByOrigin m
 		return h.rate
 	}
 
-	for v, t := range timeTakenToVisitValveByOrigin[h.valve] {
-		// Don't revisit the same valve.
-		if h.visited[v] {
-			continue
+	visitable := func(h state) map[string]int {
+		res := make(map[string]int)
+		for v, t := range timeTakenToVisitValveByOrigin[h.valve] {
+			// Don't revisit the same valve.
+			if h.visited[v] {
+				continue
+			}
+
+			// Not enough time to visit (1 minute) and open (another 1 minute)
+			if h.minutes-t < 1 {
+				continue
+			}
+
+			res[v] = t
 		}
 
-		// Not enough time to visit (1 minute) and open (another 1 minute)
-		if h.minutes-t < 1 {
-			res = max(res, h.rate)
-			continue
-		}
-
-		visited := copyMap(h.visited)
-		visited[v] = true
-
-		rate := valves[v].rate
-		newRate := (h.minutes-(t+1))*rate + h.rate
-		next := checkMove(state{
-			valve: v,
-			// The t+1 refers to the additional time taken to open the valve after visiting.
-			rate:    (h.minutes-(t+1))*rate + h.rate,
-			minutes: h.minutes - (t + 1),
-			visited: visited,
-		}, valves, timeTakenToVisitValveByOrigin)
-
-		res = max(res, max(newRate, next))
+		return res
 	}
 
-	return res
+	var move func(h state) int
+	move = func(h state) int {
+		for v, t := range visitable(h) {
+			visited := copyMap(h.visited)
+			visited[v] = true
+
+			// The t+1 refers to the additional time taken to open the valve after visiting.
+			mins := h.minutes - (t + 1)
+			rate := mins*valves[v].rate + h.rate
+			next := state{
+				valve:   v,
+				rate:    rate,
+				minutes: mins,
+				visited: visited,
+			}
+
+			res = max(res, max(rate, move(next)))
+		}
+		return max(res, h.rate)
+	}
+
+	return move(h)
 }
 
 func checkMove2(h state2, valves map[string]valve, timeTakenToVisitValveByOrigin map[string]map[string]int) int {
@@ -81,7 +93,25 @@ func checkMove2(h state2, valves map[string]valve, timeTakenToVisitValveByOrigin
 		}
 		sort.Strings(valves)
 
-		return fmt.Sprintf("%v:%v:%v", valves, h.valves, h.minutes)
+		return fmt.Sprintf("%v:%v:%v", h.minutes, valves, h.valves)
+	}
+
+	visitable := func(h state2, at int) map[string]int {
+		res := make(map[string]int)
+		for v, t := range timeTakenToVisitValveByOrigin[h.valves[at]] {
+			// Don't revisit the same valve.
+			if h.visited[v] {
+				continue
+			}
+
+			// Not enough time to visit (1 minute) and open (another 1 minute)
+			if h.minutes[at]-t < 1 {
+				continue
+			}
+			res[v] = t
+		}
+
+		return res
 	}
 
 	var move func(h state2) int
@@ -89,97 +119,76 @@ func checkMove2(h state2, valves map[string]valve, timeTakenToVisitValveByOrigin
 		var res int
 
 		if n, ok := cache[cacheKey(h)]; ok {
-			cache[cacheKey(h)] = max(n, h.rate())
-			return max(n, h.rate())
+			return max(h.rate(), n)
 		}
 
-		didMove := false
-		for v, t := range timeTakenToVisitValveByOrigin[h.valves[0]] {
-			// Don't revisit the same valve.
-			if h.visited[v] {
-				continue
+		visit0 := visitable(h, 0)
+		visit1 := visitable(h, 1)
+
+		if len(visit0) != 0 && len(visit1) != 0 {
+			// Visit both.
+			for v0, t0 := range visit0 {
+				visited0 := copyMap(h.visited)
+				visited0[v0] = true
+				mins0 := h.minutes[0] - (t0 + 1)
+				rate0 := mins0*valves[v0].rate + h.rates[0]
+
+				for v1, t1 := range visit1 {
+					if visited0[v1] {
+						continue
+					}
+
+					visited1 := copyMap(visited0)
+					visited1[v1] = true
+					mins1 := h.minutes[1] - (t1 + 1)
+					rate1 := mins1*valves[v1].rate + h.rates[1]
+
+					next := state2{
+						valves:  [2]string{v0, v1},
+						rates:   [2]int{rate0, rate1},
+						minutes: [2]int{mins0, mins1},
+						visited: visited1,
+					}
+					res = max(res, move(next))
+				}
 			}
-
-			// Not enough time to visit (1 minute) and open (another 1 minute)
-			if h.minutes[0]-t < 1 {
-				continue
-			}
-			didMove = true
-
-			visited := copyMap(h.visited)
-			visited[v] = true
-
-			fstRate := (h.minutes[0]-(t+1))*valves[v].rate + h.rates[0]
-
-			for vv, tt := range timeTakenToVisitValveByOrigin[h.valves[1]] {
-				if visited[vv] {
-					res = max(res, fstRate+h.rates[1])
-					continue
-				}
-				// Not enough time to visit (1 minute) and open (another 1 minute)
-				if h.minutes[1]-tt < 1 {
-					res = max(res, fstRate+h.rates[1])
-					continue
-				}
-
-				vvisited := copyMap(visited)
-				vvisited[vv] = true
-
-				sndRate := (h.minutes[1]-(tt+1))*valves[vv].rate + h.rates[1]
-				minutes := [2]int{
-					h.minutes[0] - (t + 1),
-					h.minutes[1] - (tt + 1),
-				}
+		} else if len(visit0) == 0 {
+			// Visit 1 only.
+			for v1, t1 := range visit1 {
+				visited1 := copyMap(h.visited)
+				visited1[v1] = true
+				mins1 := h.minutes[1] - (t1 + 1)
+				rate1 := mins1*valves[v1].rate + h.rates[1]
 
 				next := state2{
-					valves: [2]string{v, vv},
-					// The t+1 refers to the additional time taken to open the valve after visiting.
-					rates:   [2]int{fstRate, sndRate},
-					minutes: minutes,
-					visited: vvisited,
+					valves:  [2]string{h.valves[0], v1},
+					rates:   [2]int{h.rates[0], rate1},
+					minutes: [2]int{h.minutes[0], mins1},
+					visited: visited1,
 				}
-				if n, ok := cache[cacheKey(next)]; ok {
-					res = max(res, n)
-					continue
-				}
-				res = max(res, max(fstRate+sndRate, move(next)))
-				cache[cacheKey(next)] = res
+				res = max(res, move(next))
 			}
-		}
+		} else if len(visit1) == 0 {
+			// Visit 0 only.
+			for v0, t0 := range visit0 {
+				visited0 := copyMap(h.visited)
+				visited0[v0] = true
+				mins0 := h.minutes[0] - (t0 + 1)
+				rate0 := mins0*valves[v0].rate + h.rates[0]
 
-		if !didMove {
-			for vv, tt := range timeTakenToVisitValveByOrigin[h.valves[1]] {
-				if h.visited[vv] {
-					res = max(res, h.rate())
-					continue
-				}
-				// Not enough time to visit (1 minute) and open (another 1 minute)
-				if h.minutes[1]-tt < 1 {
-					res = max(res, h.rate())
-					continue
-				}
-
-				vvisited := copyMap(h.visited)
-				vvisited[vv] = true
-
-				sndRate := (h.minutes[1]-(tt+1))*valves[vv].rate + h.rates[1]
 				next := state2{
-					valves: [2]string{h.valves[0], vv},
-					// The t+1 refers to the additional time taken to open the valve after visiting.
-					rates:   [2]int{h.rates[0], sndRate},
-					minutes: [2]int{h.minutes[0], h.minutes[1] - (tt + 1)},
-					visited: vvisited,
+					valves:  [2]string{v0, h.valves[1]},
+					rates:   [2]int{rate0, h.rates[1]},
+					minutes: [2]int{mins0, h.minutes[1]},
+					visited: visited0,
 				}
-				if n, ok := cache[cacheKey(next)]; ok {
-					res = max(res, n)
-					continue
-				}
-				res = max(res, max(h.rates[0]+sndRate, move(next)))
-				cache[cacheKey(next)] = res
+				res = max(res, move(next))
 			}
+		} else {
+			return h.rate()
 		}
 
-		cache[cacheKey(h)] = max(h.rate(), res)
+		cache[cacheKey(h)] = max(cache[cacheKey(h)], max(res, h.rate()))
 
 		return cache[cacheKey(h)]
 	}
