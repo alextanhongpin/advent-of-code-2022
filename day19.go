@@ -3,223 +3,159 @@ package main
 import (
 	"fmt"
 	"math"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 )
 
 func main() {
-	fmt.Println(part1(input1))
+	fmt.Println(part1(input1)) // 33
 	fmt.Println(part1(input2)) // 1306
-	fmt.Println(part2(input1))
+	fmt.Println(part2(input1)) // 2852
 	fmt.Println(part2(input2)) // 37604
 }
 
+func part1(input string) int {
+	return solver(input, 1)
+}
+
+func part2(input string) int {
+	return solver(input, 2)
+}
+
+func solver(input string, part int) int {
+	iterations := [2]int{24, 32}
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var total int
+
+	blueprints := parse(input)
+	if part == 2 {
+		total = 1
+		if len(blueprints) > 3 {
+			blueprints = blueprints[:3]
+		}
+	}
+
+	wg.Add(len(blueprints))
+	rateLimit := make(chan bool, 10)
+	for i, recipes := range blueprints {
+		rateLimit <- true
+		go func(i int, recipes []recipe) {
+			defer func() {
+				<-rateLimit
+			}()
+
+			defer wg.Done()
+
+			maxOr := maxOre(recipes)
+
+			q := []state{newState()}
+
+			c := make(map[string]bool)
+			var bestScore int = math.MinInt
+			for t := 0; t < iterations[part-1]; t++ {
+				j := len(q)
+				fmt.Println(i, t, j, bestScore, q[len(q)-1])
+				for _, s := range q[:j] {
+					if s.minerals["geode"] > bestScore {
+						bestScore = s.minerals["geode"]
+					}
+					if s.minerals["geode"] < bestScore-1 {
+						continue
+					}
+
+					ns := s.next(recipes)
+					alreadyMax := false
+					for _, n := range ns {
+						if c[n.String()] {
+							continue
+						}
+						c[n.String()] = true
+
+						if n.minerals["ore"] >= maxOr {
+							alreadyMax = true
+						}
+						q = append(q, n)
+					}
+
+					if !alreadyMax {
+						if c[s.produce().String()] {
+							continue
+						}
+						c[s.produce().String()] = true
+						q = append(q, s.produce())
+					}
+				}
+				q = q[j:]
+			}
+			for _, s := range q {
+				if s.minerals["geode"] > bestScore {
+					bestScore = s.minerals["geode"]
+				}
+			}
+
+			if part == 1 {
+				qualityLevel := bestScore * (i + 1)
+				fmt.Println("quality level for", i+1, bestScore, qualityLevel)
+				mu.Lock()
+				total += qualityLevel
+				mu.Unlock()
+			} else {
+				fmt.Println("best score for", i+1, bestScore)
+				total *= bestScore
+			}
+		}(i, recipes)
+	}
+	wg.Wait()
+
+	return total
+}
+
 type state struct {
-	ores   map[string]int
-	robots map[string]int
+	minerals map[string]int
+	robots   map[string]int
 }
 
 func (s state) produce() state {
-	ss := s.clone()
-	for r, c := range ss.robots {
-		ss.ores[r] += c
+	sc := s.clone()
+	for r, c := range sc.robots {
+		sc.minerals[r] += c
 	}
-	return ss
+	return sc
 }
 
 func (s state) clone() state {
 	return state{
-		ores:   copyMap(s.ores),
-		robots: copyMap(s.robots),
+		minerals: copyMap(s.minerals),
+		robots:   copyMap(s.robots),
 	}
 }
 
 func (s state) String() string {
-	var ores, robots []string
-	for k, v := range s.ores {
-		ores = append(ores, fmt.Sprintf("%v:%v", k, v))
-	}
-	for k, v := range s.robots {
-		robots = append(robots, fmt.Sprintf("%v:%v", k, v))
-	}
-	sort.Strings(ores)
-	sort.Strings(robots)
-	return fmt.Sprintf("%v:%v", ores, robots)
+	return fmt.Sprintf("%v:%v", s.minerals, s.robots)
 }
 
 func newState() state {
-	ores := make(map[string]int)
+	minerals := make(map[string]int)
 	robots := make(map[string]int)
 	robots["ore"] = 1
 	return state{
-		ores:   ores,
-		robots: robots,
+		minerals: minerals,
+		robots:   robots,
 	}
 }
 
-func part1(input string) int {
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	var total int
-	blueprints := parse(input)
-	wg.Add(len(blueprints))
-	rateLimit := make(chan bool, 10)
-	for i, recipes := range blueprints {
-		rateLimit <- true
-		go func(i int, recipes []recipe) {
-			defer func() {
-				<-rateLimit
-			}()
-
-			defer wg.Done()
-
-			maxOr := maxOre(recipes)
-			//fmt.Println(i, recipes)
-			// Simulate 24 minutes.
-			q := []state{newState()}
-
-			c := make(map[string]bool)
-			var bestScore int = math.MinInt
-			for t := 0; t < 24; t++ {
-				j := len(q)
-				fmt.Println(i, t, j, bestScore, q[len(q)-1])
-				for _, s := range q[:j] {
-					if s.ores["geode"] > bestScore {
-						bestScore = s.ores["geode"]
-					}
-					if s.ores["geode"] < bestScore-1 {
-						continue
-					}
-					ns := next(s, recipes)
-					alreadyMax := false
-					for _, n := range ns {
-						if c[n.String()] {
-							continue
-						}
-						c[n.String()] = true
-						if n.ores["ore"] >= maxOr {
-							alreadyMax = true
-						}
-						q = append(q, n)
-					}
-					if !alreadyMax {
-						if c[s.produce().String()] {
-							continue
-						}
-						c[s.produce().String()] = true
-						q = append(q, s.produce())
-					}
-				}
-				q = q[j:]
-			}
-			for _, s := range q {
-				if s.ores["geode"] > bestScore {
-					bestScore = s.ores["geode"]
-				}
-			}
-
-			qualityLevel := bestScore * (i + 1)
-			fmt.Println("quality level for", i+1, bestScore, qualityLevel)
-			mu.Lock()
-			total += qualityLevel
-			mu.Unlock()
-
-		}(i, recipes)
-	}
-	wg.Wait()
-
-	return total
-}
-
-func part2(input string) int {
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	total := 1
-	blueprints := parse(input)
-	if len(blueprints) > 3 {
-		blueprints = blueprints[:3]
-	}
-	wg.Add(len(blueprints))
-	rateLimit := make(chan bool, 10)
-	for i, recipes := range blueprints {
-		rateLimit <- true
-		go func(i int, recipes []recipe) {
-			defer func() {
-				<-rateLimit
-			}()
-
-			defer wg.Done()
-
-			maxOr := maxOre(recipes)
-			//fmt.Println(i, recipes)
-			// Simulate 24 minutes.
-			q := []state{newState()}
-
-			c := make(map[string]bool)
-			var bestScore int = math.MinInt
-			for t := 0; t < 32; t++ {
-				j := len(q)
-				fmt.Println(i, t, j, bestScore, q[len(q)-1])
-				for _, s := range q[:j] {
-					if s.ores["geode"] > bestScore {
-						bestScore = s.ores["geode"]
-					}
-					if s.ores["geode"] < bestScore-1 {
-						continue
-					}
-					ns := next(s, recipes)
-					alreadyMax := false
-					for _, n := range ns {
-						if c[n.String()] {
-							continue
-						}
-						c[n.String()] = true
-						if n.ores["ore"] >= maxOr {
-							alreadyMax = true
-						}
-						q = append(q, n)
-					}
-					if !alreadyMax {
-						if c[s.produce().String()] {
-							continue
-						}
-						c[s.produce().String()] = true
-						q = append(q, s.produce())
-					}
-				}
-				q = q[j:]
-			}
-			for _, s := range q {
-				if s.ores["geode"] > bestScore {
-					bestScore = s.ores["geode"]
-				}
-			}
-
-			fmt.Println("quality level for", i+1, bestScore)
-			mu.Lock()
-			total *= bestScore
-			mu.Unlock()
-
-		}(i, recipes)
-	}
-	wg.Wait()
-
-	return total
-}
-
-func next(s state, recipes []recipe) []state {
+func (s state) next(recipes []recipe) []state {
 	states := []state{}
 	for _, r := range recipes {
-		ores, ok := r.build(s.ores)
+		minerals, ok := r.build(s.minerals)
 		if ok {
-			//fmt.Println("before", s)
 			sc := s.clone()
-			sc.ores = ores
+			sc.minerals = minerals
 			sc = sc.produce()
 			sc.robots[r.output]++
-			//fmt.Println("after", sc)
 			states = append(states, sc)
 		}
 	}
