@@ -8,6 +8,7 @@ import (
 )
 
 func main() {
+	// TODO: Optimize with double linked-list.
 	fmt.Println(part1(input1)) // 3
 	fmt.Println(part1(input2)) // 13883
 	fmt.Println(part2(input1)) // 1623178306
