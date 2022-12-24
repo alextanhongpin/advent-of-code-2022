@@ -213,14 +213,9 @@ type Item struct {
 // A PriorityQueue implements heap.Interface and holds Items.
 type PriorityQueue []Item
 
-func (pq PriorityQueue) Len() int { return len(pq) }
-func (pq PriorityQueue) Less(i, j int) bool {
-	//if pq[i].minutes == pq[j].minutes {
-	//return -(pq[i].point.x + pq[i].point.y) < -(pq[j].point.x + pq[j].point.y)
-	//}
-	return pq[i].minutes < pq[j].minutes
-}
-func (pq PriorityQueue) Swap(i, j int) { pq[i], pq[j] = pq[j], pq[i] }
+func (pq PriorityQueue) Len() int           { return len(pq) }
+func (pq PriorityQueue) Less(i, j int) bool { return pq[i].minutes < pq[j].minutes }
+func (pq PriorityQueue) Swap(i, j int)      { pq[i], pq[j] = pq[j], pq[i] }
 
 func (pq *PriorityQueue) Push(x any) {
 	item := x.(Item)
